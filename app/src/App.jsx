@@ -185,7 +185,7 @@ function App() {
         )}
 
         {activeTab === 'configuracoes' && (
-          <Configuracoes turmas={turmas} onSaveTurmas={setTurmas} />
+          <Configuracoes turmas={turmas} onSaveTurmas={setTurmas} alunos={alunos} />
         )}
 
         {/* Cadastro / Edição */}

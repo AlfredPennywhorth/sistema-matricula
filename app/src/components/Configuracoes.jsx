@@ -1,11 +1,23 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Save, AlertCircle, CheckCircle, School } from 'lucide-react';
 
-export function Configuracoes({ turmas, onSaveTurmas }) {
+export function Configuracoes({ turmas, onSaveTurmas, alunos = [] }) {
     // Estado local para edição antes de salvar
     const [turmasLocais, setTurmasLocais] = useState(turmas);
     const [mensagem, setMensagem] = useState(null);
+
+    // Calcula quantidade de alunos ativos por turma em tempo real
+    const qtdeAlunosPorTurma = useMemo(() => {
+        const mapa = {};
+        alunos
+            .filter(a => Number(a.statusId) !== 3) // exclui desistentes
+            .forEach(a => {
+                const id = Number(a.turmaId);
+                mapa[id] = (mapa[id] || 0) + 1;
+            });
+        return mapa;
+    }, [alunos]);
 
     // Sincroniza se a prop mudar (embora aqui seja a fonte da verdade para edição)
     useEffect(() => {
@@ -83,15 +95,20 @@ export function Configuracoes({ turmas, onSaveTurmas }) {
                                     </span>
                                 </td>
                                 <td className="px-6 py-3">
-                                    {/* Barra visual de ocupação (baseada nos dados atuais salvos, não em tempo real aqui pra simplificar) */}
+                                    {/* Barra visual de ocupação calculada em tempo real */}
                                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden w-24">
                                         <div
-                                            className={`h-full ${turma.qtdeAlunos > turma.capacidade ? 'bg-red-500' : 'bg-blue-500'}`}
-                                            style={{ width: `${Math.min((turma.qtdeAlunos / turma.capacidade) * 100, 100)}%` }}
+                                            className={`h-full ${(qtdeAlunosPorTurma[turma.id] || 0) > turma.capacidade
+                                                    ? 'bg-red-500'
+                                                    : (qtdeAlunosPorTurma[turma.id] || 0) / turma.capacidade > 0.85
+                                                        ? 'bg-amber-500'
+                                                        : 'bg-blue-500'
+                                                }`}
+                                            style={{ width: `${Math.min(((qtdeAlunosPorTurma[turma.id] || 0) / turma.capacidade) * 100, 100)}%` }}
                                         ></div>
                                     </div>
                                     <span className="text-xs text-slate-400 mt-1 block">
-                                        {turma.qtdeAlunos || 0} matriculados
+                                        {qtdeAlunosPorTurma[turma.id] || 0} matriculados
                                     </span>
                                 </td>
                                 <td className="px-6 py-3 text-center">

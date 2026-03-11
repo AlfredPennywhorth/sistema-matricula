@@ -7,7 +7,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
     ResponsiveContainer, PieChart, Pie, Cell, ComposedChart
 } from 'recharts';
-import { tblTurmas, tblPeriodo } from '../data/db';
+import { tblTurmas, tblPeriodo, tblStatusMatricula } from '../data/db';
 
 const COLORS_PIE = ['#3b82f6', '#ec4899', '#f59e0b', '#10b981'];
 
@@ -15,6 +15,41 @@ export function Dashboard({ alunos, turmas = tblTurmas }) {
     // Filtros
     const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
     const [filtroNivel, setFiltroNivel] = useState('todos');
+
+    // --- Exportação CSV ---
+    const exportarCSV = () => {
+        const cabecalho = ['Nome', 'RA', 'Gênero', 'Nascimento', 'Turma', 'Período', 'Status', 'Bolsa (%)', 'Pagante', 'Irmão', 'Colégio Anterior', 'Laudo', 'Data Matrícula'];
+
+        const linhas = dadosFiltrados.map(a => {
+            const turma = turmas.find(t => t.id === Number(a.turmaId));
+            const periodo = tblPeriodo.find(p => p.id === Number(a.periodoId));
+            const status = tblStatusMatricula.find(s => s.id === Number(a.statusId));
+            return [
+                a.nome || '',
+                a.registro || '',
+                a.genero === 'M' ? 'Masculino' : 'Feminino',
+                a.nascimento || '',
+                turma ? `${turma.serie} ${turma.turma}` : (a.turmaId || ''),
+                periodo ? periodo.periodo : '',
+                status ? status.status : '',
+                a.bolsa || 0,
+                (a.pagante === true || a.pagante === 'Sim') ? 'Sim' : 'Não',
+                a.nomeIrmao || '',
+                a.colegioAnterior || '',
+                a.laudo || '',
+                a.dataMatricula || ''
+            ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+        });
+
+        const csv = [cabecalho.join(','), ...linhas].join('\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `alunos_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
 
     // --- Processamento de Dados Base ---
     const dadosFiltrados = useMemo(() => {
@@ -37,7 +72,7 @@ export function Dashboard({ alunos, turmas = tblTurmas }) {
             }
             return passa;
         });
-    }, [alunos, filtroPeriodo, filtroNivel]);
+    }, [alunos, filtroPeriodo, filtroNivel, turmas]);
 
     const ativos = useMemo(() => dadosFiltrados.filter(a => Number(a.statusId) !== 3), [dadosFiltrados]);
 
@@ -73,7 +108,7 @@ export function Dashboard({ alunos, turmas = tblTurmas }) {
         const ocupacao = capacidadeTotal > 0 ? ((total / capacidadeTotal) * 100).toFixed(1) : 0;
 
         return { total, novos, rematriculas, ocupacao, meninos, meninas, pctMeninos, pctMeninas };
-    }, [ativos, filtroPeriodo, filtroNivel]);
+    }, [ativos, filtroPeriodo, filtroNivel, turmas]);
 
     // --- Gráfico Evolução (Barras Empilhadas) ---
     const dadosEvolucao = useMemo(() => {
@@ -95,7 +130,7 @@ export function Dashboard({ alunos, turmas = tblTurmas }) {
                 if (Number(aluno.statusId) === 2) mapa[chave].novos += 1;
                 else mapa[chave].rematricula += 1;
 
-            } catch (e) { }
+            } catch { /* data inválida, ignora */ }
         });
         return Object.values(mapa).sort((a, b) => a.chave.localeCompare(b.chave));
     }, [ativos]);
@@ -147,7 +182,7 @@ export function Dashboard({ alunos, turmas = tblTurmas }) {
         });
 
         return Object.values(mapaSeries);
-    }, [ativos, filtroNivel]); // Ignora filtroPeriodo pois queremos mostrar ambos empilhados
+    }, [ativos, filtroNivel, turmas]); // Ignora filtroPeriodo pois queremos mostrar ambos empilhados
 
     return (
         <div className="space-y-6 animate-fade-in pb-12">
@@ -170,7 +205,7 @@ export function Dashboard({ alunos, turmas = tblTurmas }) {
                         <option value="fundamental">Fundamental</option>
                         <option value="medio">Ensino Médio</option>
                     </select>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 shadow-lg shadow-slate-900/10">
+                    <button onClick={exportarCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 shadow-lg shadow-slate-900/10">
                         <Download size={16} /><span className="hidden sm:inline">Exportar</span>
                     </button>
                 </div>
