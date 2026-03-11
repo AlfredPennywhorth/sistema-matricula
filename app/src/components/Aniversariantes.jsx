@@ -73,10 +73,10 @@ export function Aniversariantes({ alunos }) {
     }, [mapAniversariantes, diaSelecionado, incluirFimDeSemana, mesSelecionado]);
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 animate-fade-in pb-12 h-[calc(100vh-140px)]">
+        <div className="flex flex-col lg:flex-row gap-6 animate-fade-in pb-12 lg:h-[calc(100vh-140px)]">
 
             {/* --- Painel Esquerdo: Calendário e Filtros --- */}
-            <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0 lg:overflow-y-auto pr-2 custom-scrollbar">
 
                 {/* Seletor de Mês */}
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -188,7 +188,7 @@ export function Aniversariantes({ alunos }) {
             </div>
 
             {/* --- Painel Direito: Lista (Scrollável) --- */}
-            <div className="flex-1 flex flex-col min-h-0 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 p-4">
+            <div className="flex-1 flex flex-col lg:min-h-0 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 p-4">
                 <div className="flex justify-between items-center mb-4 shrink-0">
                     <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
                         {diaSelecionado ? (
@@ -204,8 +204,8 @@ export function Aniversariantes({ alunos }) {
                     </h2>
                 </div>
 
-                <div className="overflow-y-auto custom-scrollbar pr-2 flex-1">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="lg:overflow-y-auto custom-scrollbar pr-2 flex-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         {listaExibida.length > 0 ? (
                             listaExibida.map(aluno => {
                                 const [, mes, dia] = aluno.nascimento.split('-');
