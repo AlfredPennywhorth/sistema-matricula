@@ -12,6 +12,10 @@ import { Dashboard } from './components/Dashboard';
 import { Aniversariantes } from './components/Aniversariantes';
 import { Configuracoes } from './components/Configuracoes';
 import { Diagnostico } from './components/Diagnostico';
+import {
+    subscribeAlunos, adicionarAluno, atualizarAluno, excluirAluno,
+    subscribeTurmas, salvarTurmas, excluirTurma
+} from './services/firestoreService';
 
 // --- Helpers ---
 function calcularIdade(nascimento) {
@@ -40,23 +44,34 @@ function App() {
     const [alunoEmEdicao, setAlunoEmEdicao] = useState(null);
     const [alunoDuplicadoAviso, setAlunoDuplicadoAviso] = useState(null);
 
-    // Turmas (State Global com Persistência)
-    const [turmas, setTurmas] = useState(() => {
-        const saved = localStorage.getItem('sistema_matriculas_turmas_v2');
-        return saved ? JSON.parse(saved) : tblTurmas;
-    });
-    useEffect(() => {
-        localStorage.setItem('sistema_matriculas_turmas_v2', JSON.stringify(turmas));
-    }, [turmas]);
+    const [carregando, setCarregando] = useState(true);
+    const [erroConexao, setErroConexao] = useState(false);
 
-    // Alunos (State Global com Persistência)
-    const [alunos, setAlunos] = useState(() => {
-        const saved = localStorage.getItem('sistema_matriculas_alunos');
-        return saved ? JSON.parse(saved) : alunosIniciais;
-    });
+    // ── Turmas: lê do Firestore em tempo real ──────────────────────────────
+    const [turmas, setTurmas] = useState([]);
     useEffect(() => {
-        localStorage.setItem('sistema_matriculas_alunos', JSON.stringify(alunos));
-    }, [alunos]);
+        const unsub = subscribeTurmas((dados) => {
+            // Normaliza: converte id do documento (string) para número onde possível
+            const normalizadas = dados.map(t => ({
+                ...t,
+                id: isNaN(Number(t.id)) ? t.id : Number(t.id),
+                capacidade: Number(t.capacidade) || 25
+            }));
+            // Se o Firestore ainda não tem turmas, usa a tabela local como fallback
+            setTurmas(normalizadas.length > 0 ? normalizadas : tblTurmas);
+        });
+        return unsub;
+    }, []);
+
+    // ── Alunos: lê do Firestore em tempo real ──────────────────────────────
+    const [alunos, setAlunos] = useState([]);
+    useEffect(() => {
+        const unsub = subscribeAlunos((dados) => {
+            setAlunos(dados);
+            setCarregando(false);
+        });
+        return unsub;
+    }, []);
 
     // Alunos ativos (exclui arquivo morto)
     const alunosAtivos = useMemo(() =>
@@ -157,32 +172,32 @@ function App() {
         return null;
     };
 
-    // Salvar Matrícula
-    const handleSaveMatricula = (dadosAluno) => {
+    // Salvar Matrícula → Firestore
+    const handleSaveMatricula = async (dadosAluno) => {
         const duplicata = verificarDuplicata(dadosAluno);
-
         if (duplicata) {
             const confirmar = window.confirm(
-                `⚠️ ATENÇÃO - ${duplicata.tipo === 'ra' ? 'RA Duplicado' : 'Nome Duplicado'}\n\n${duplicata.msg}\n\n${duplicata.tipo === 'ra' ? 'Corrija o RA antes de continuar.' : 'Deseja prosseguir mesmo assim (homonônimo)?'}`
+                `⚠️ ATENÇÃO - ${duplicata.tipo === 'ra' ? 'RA Duplicado' : 'Nome Duplicado'}\n\n${duplicata.msg}\n\n${duplicata.tipo === 'ra' ? 'Corrija o RA antes de continuar.' : 'Deseja prosseguir mesmo assim (homônimo)?'}`
             );
             if (duplicata.tipo === 'ra' || !confirmar) return;
         }
 
-        if (alunoEmEdicao) {
-            setAlunos(prev => prev.map(a => a.id === alunoEmEdicao.id ? { ...dadosAluno, id: alunoEmEdicao.id } : a));
-            alert('Aluno atualizado com sucesso!');
-            setAlunoEmEdicao(null);
-        } else {
-            const novoAluno = { ...dadosAluno, id: Date.now() };
-            if (novoAluno.nomeIrmao && novoAluno.sequenciaFamilia > 1 && !novoAluno.bolsa) {
-                if (window.confirm('Detectamos que este aluno tem irmão matriculado. Deseja aplicar a bolsa automática de 10%?')) {
-                    novoAluno.bolsa = 10;
-                }
+        try {
+            if (alunoEmEdicao) {
+                // Edição: remove o campo 'id' (é a chave do doc, não um campo)
+                const { id, ...campos } = dadosAluno;
+                await atualizarAluno(alunoEmEdicao.id, campos);
+                alert('Aluno atualizado com sucesso!');
+                setAlunoEmEdicao(null);
+            } else {
+                const { id, ...campos } = dadosAluno;
+                await adicionarAluno(campos);
+                alert('Aluno matriculado com sucesso!');
             }
-            setAlunos(prev => [...prev, novoAluno]);
-            alert('Aluno matriculado com sucesso!');
+            setActiveTab('alunos');
+        } catch (e) {
+            alert('Erro ao salvar: ' + e.message);
         }
-        setActiveTab('alunos');
     };
 
     const handleEditarClick = (aluno) => {
@@ -190,24 +205,38 @@ function App() {
         setActiveTab('matricula_nova');
     };
 
-    const handleExcluirAluno = (aluno) => {
+    const handleExcluirAluno = async (aluno) => {
         if (window.confirm(`Tem certeza que deseja EXCLUIR o aluno "${aluno.nome}" (RA: ${aluno.registro || 'S/ RA'})?\n\nEsta ação não pode ser desfeita.`)) {
-            setAlunos(prev => prev.filter(a => a.id !== aluno.id));
+            try {
+                await excluirAluno(aluno.id);
+            } catch (e) {
+                alert('Erro ao excluir: ' + e.message);
+            }
         }
     };
 
-    const handleImportacao = (novosDados) => {
-        const dadosFormatados = novosDados.map((d, i) => ({ ...d, id: Date.now() + i }));
-        if (alunos.length > 0) {
-            if (window.confirm('Deseja substituir a base atual pela nova importação?\n[OK] Substituir Tudo\n[Cancelar] Adicionar aos Existentes')) {
-                setAlunos(dadosFormatados);
-            } else {
-                setAlunos([...alunos, ...dadosFormatados]);
+    const handleImportacao = async (novosDados) => {
+        try {
+            const substituir = alunos.length > 0
+                ? window.confirm('Deseja substituir a base atual pela nova importação?\n[OK] Substituir Tudo\n[Cancelar] Adicionar aos Existentes')
+                : false;
+
+            if (substituir) {
+                // Exclui todos os alunos existentes
+                await Promise.all(alunos.map(a => excluirAluno(a.id)));
             }
-        } else {
-            setAlunos(dadosFormatados);
+
+            // Adiciona os novos alunos
+            await Promise.all(novosDados.map(d => {
+                const { id, ...campos } = d;
+                return adicionarAluno(campos);
+            }));
+
+            alert(`${novosDados.length} aluno(s) importado(s) com sucesso!`);
+            setActiveTab('dashboard');
+        } catch (e) {
+            alert('Erro na importação: ' + e.message);
         }
-        setActiveTab('dashboard');
     };
 
     const handleNavegacao = (tab) => {

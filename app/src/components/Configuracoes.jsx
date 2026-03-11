@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Save, Plus, Trash2, Edit, X, CheckCircle, AlertCircle, School, Check } from 'lucide-react';
 import { tblSalas } from '../data/db';
+import { salvarTurmas, excluirTurma as excluirTurmaFirestore } from '../services/firestoreService';
 
 const SERIES_SUGERIDAS = [
     'Jardim IV', 'Jardim V',
@@ -48,10 +49,14 @@ export function Configuracoes({ turmas, onSaveTurmas, alunos = [] }) {
         setTimeout(() => setMensagem(null), 3000);
     };
 
-    // Salvar todas as turmas no estado global
-    const handleSalvarTudo = () => {
-        onSaveTurmas(turmasLocais);
-        exibirMensagem('sucesso', 'Configurações salvas com sucesso!');
+    // Salvar todas as turmas no Firestore
+    const handleSalvarTudo = async () => {
+        try {
+            await salvarTurmas(turmasLocais);
+            exibirMensagem('sucesso', 'Configurações salvas no Firestore!');
+        } catch (e) {
+            exibirMensagem('erro', 'Erro ao salvar: ' + e.message);
+        }
     };
 
     // Abrir modal para nova turma
@@ -68,17 +73,19 @@ export function Configuracoes({ turmas, onSaveTurmas, alunos = [] }) {
         setModalAberto(true);
     };
 
-    // Excluir turma
-    const handleExcluirTurma = (turma) => {
+    // Excluir turma do Firestore
+    const handleExcluirTurma = async (turma) => {
         const qtde = qtdeAlunosPorTurma[turma.id] || 0;
         const msg = qtde > 0
             ? `A turma "${turma.serie} ${turma.turma}" tem ${qtde} aluno(s) matriculado(s). Excluir mesmo assim?`
             : `Excluir a turma "${turma.serie} ${turma.turma}"?`;
         if (window.confirm(msg)) {
-            const nova = turmasLocais.filter(t => t.id !== turma.id);
-            setTurmasLocais(nova);
-            onSaveTurmas(nova);
-            exibirMensagem('sucesso', 'Turma removida.');
+            try {
+                await excluirTurmaFirestore(turma.id);
+                exibirMensagem('sucesso', 'Turma excluída.');
+            } catch (e) {
+                exibirMensagem('erro', 'Erro ao excluir: ' + e.message);
+            }
         }
     };
 
