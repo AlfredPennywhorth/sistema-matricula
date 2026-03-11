@@ -4,7 +4,7 @@ import {
   Users, Calendar, GraduationCap, LayoutDashboard,
   Settings, ChevronRight, UserPlus, Search, UploadCloud, Trash2, Edit, Cake
 } from 'lucide-react';
-import { tblTurmas, alunosIniciais, tblStatusMatricula } from './data/db';
+import { tblTurmas, alunosIniciais, tblStatusMatricula } from './data/db'; // tblTurmas usado como valor inicial do state e na lista de alunos
 import { FormularioMatricula } from './components/FormularioMatricula';
 import { ImportadorAlunos } from './components/ImportadorAlunos';
 import { Dashboard } from './components/Dashboard';
@@ -42,16 +42,16 @@ function App() {
   const alunosFiltrados = useMemo(() => {
     if (!searchTerm) return alunos;
     const lower = searchTerm.toLowerCase();
-    // Filtra por Nome, RA ou Turma (Nome da turma)
+    // Filtra por Nome, RA ou Turma (Nome da turma) - usa state `turmas` para respeitar edições de Configurações
     return alunos.filter(a => {
-      const nomeTurma = tblTurmas.find(t => t.id === Number(a.turmaId));
+      const nomeTurma = turmas.find(t => t.id === Number(a.turmaId));
       const turmaStr = nomeTurma ? `${nomeTurma.serie} ${nomeTurma.turma}` : '';
 
       return a.nome?.toLowerCase().includes(lower) ||
         a.registro?.toString().includes(lower) ||
         turmaStr.toLowerCase().includes(lower);
     });
-  }, [alunos, searchTerm]);
+  }, [alunos, searchTerm, turmas]);
 
   // Ação de Salvar (Criação ou Edição)
   const handleSaveMatricula = (dadosAluno) => {
@@ -146,7 +146,7 @@ function App() {
           />
         </nav>
 
-        <div className="mt-auto pt-6 border-t border-slate-800 space-y-2">
+        <div className="mt-auto pt-6 border-t border-slate-800">
           <button
             onClick={() => setActiveTab('importacao')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm
@@ -156,7 +156,6 @@ function App() {
             <UploadCloud size={20} />
             Importar Planilha
           </button>
-          <NavItem icon={<Settings size={20} />} label="Configurações" />
         </div>
       </aside>
 
